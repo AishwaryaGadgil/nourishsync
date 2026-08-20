@@ -1,100 +1,296 @@
 // ─────────────────────────────────────────────────────────────
 // form.js — Form Builder
 //
-// This file builds the complete daily log form by putting
-// together all the sections defined in other files.
+// Builds the complete daily log form and pre-fills it
+// with any data already saved for today in Google Sheets.
 //
-// It is the conductor — it calls the right functions from
-// datepicker.js, toggles.js and sleep.js at the right time.
-//
-// This file also handles:
-//   - Setting up the user avatar and name in the top bar
-//   - Building each form section in the correct order
-//   - Initialising everything when the page loads
+// UPDATES IN THIS VERSION:
+//   - On app load, fetches today's saved entry from Sheets
+//   - Pre-fills all toggles, food text and sleep dropdowns
+//   - Shows a loading state while fetching
+//   - If no entry exists yet — form starts blank as normal
 // ─────────────────────────────────────────────────────────────
 
 
 // ─────────────────────────────────────────────────────────────
 // buildForm
-// Main function that builds the entire daily log form.
-// Called once when the page loads via window.onload below.
-//
-// Order of sections matches the design we agreed on:
-//   1. Habits       — Workout, Walk, Studies, Difficult day
-//   2. Food         — Outside food toggle + food text area
-//   3. Supplements  — Iron, D3, B12, Khajur
-//   4. Sleep        — Bedtime, wake time, total hours
-//   5. Blood report — PDF upload (shows every day, use when needed)
-//   6. Health note  — Reminder about Apple Health auto-pull
+// Main function — builds the form structure first,
+// then fetches and pre-fills any existing data for today.
 // ─────────────────────────────────────────────────────────────
 
 function buildForm() {
 
-  // ── Step 1: Set up the top bar ──────────────────────────────
-  // Show the first letter of the user name in the avatar circle
-  // USER_NAME comes from config.js
+  // ── Set up top bar ──────────────────────────────────────────
   var avatar = document.getElementById("user-avatar");
   if (avatar) {
     avatar.textContent = USER_NAME.charAt(0).toUpperCase();
   }
 
-
-  // ── Step 2: Build the date picker ───────────────────────────
-  // Inserts the date navigation bar above the form
-  // buildDatePicker() is defined in datepicker.js
+  // ── Build date picker ───────────────────────────────────────
   buildDatePicker();
 
-
-  // ── Step 3: Build all form sections ─────────────────────────
-  // Get the form container from index.html
+  // ── Build all form sections ─────────────────────────────────
   var container = document.getElementById("form-container");
   if (!container) return;
 
-  // Build each section as an HTML string and join them together
-  // Each buildXxxSection() function returns an HTML string
   var formHTML = "";
-
   formHTML += buildHabitsSection();
   formHTML += buildFoodSection();
   formHTML += buildSupplementsSection();
-  formHTML += buildSleepSection();      // defined in sleep.js
+  formHTML += buildSleepSection();
   formHTML += buildBloodReportSection();
   formHTML += buildHealthNoteSection();
 
-  // Insert all sections into the page at once
   container.innerHTML = formHTML;
 
+  // ── Initialise sleep dropdowns ──────────────────────────────
+  // Must run after HTML is on the page
+  initialiseSleepDropdowns();
 
-  // ── Step 4: Initialise interactive elements ─────────────────
-  // Sleep dropdowns must be filled AFTER the HTML is on the page
-  // because fillTimeDropdown() needs the <select> elements to exist
-  initialiseSleepDropdowns();   // defined in sleep.js
+  // ── Load today's existing entry ─────────────────────────────
+  // Fetches from Google Sheets and pre-fills the form
+  // Shows a subtle loading indicator while fetching
+  loadTodayEntry();
+}
+
+
+// ─────────────────────────────────────────────────────────────
+// loadTodayEntry
+// Fetches any existing entry for today from Google Sheets.
+// If found — pre-fills the form with saved values.
+// If not found — form stays blank, ready for first entry.
+//
+// Uses getFormattedDate() from datepicker.js for today's date.
+// ─────────────────────────────────────────────────────────────
+
+function loadTodayEntry() {
+
+  // Show a subtle loading message in the save button area
+  showLoadingIndicator();
+
+  // Build the URL to fetch today's entry
+  // Passes date and password as URL parameters
+  var url = SHEET_URL +
+    "?type=date_entry" +
+    "&date=" + getFormattedDate() +
+    "&password=" + encodeURIComponent(APP_PASSWORD);
+
+  // Fetch existing data from Google Sheets
+  fetch(url)
+    .then(function(response) {
+      return response.json();
+    })
+    .then(function(data) {
+
+      hideLoadingIndicator();
+
+      if (data.found) {
+        // Entry exists for today — pre-fill the form
+        prefillForm(data);
+      }
+      // If not found — form stays blank, nothing to do
+    })
+    .catch(function(error) {
+      // If fetch fails (e.g. no internet) — just leave form blank
+      // Don't show an error — user can still fill in manually
+      hideLoadingIndicator();
+      console.log("Could not load existing entry:", error);
+    });
+}
+
+
+// ─────────────────────────────────────────────────────────────
+// prefillForm
+// Takes the data returned from Google Sheets and fills
+// each form field with the saved value.
+//
+// data: the object returned by getDateEntry in Code.gs
+//   data.daily       — habits and food
+//   data.supplements — supplement yes/no values
+//   data.sleep       — bedtime and wake time
+// ─────────────────────────────────────────────────────────────
+
+function prefillForm(data) {
+
+  // ── Pre-fill habit toggles ───────────────────────────────────
+  if (data.daily) {
+    setToggle("toggle-workout",      data.daily.workout);
+    setToggle("toggle-walk",         data.daily.walk);
+    setToggle("toggle-studies",      data.daily.studies);
+    setToggle("toggle-difficult-day",data.daily.difficult_day);
+    setToggle("toggle-outside-food", data.daily.outside_food);
+
+    // If outside food was Yes — show the detail field
+    if (data.daily.outside_food === "Yes") {
+      var detailBox = document.getElementById("outside-food-detail");
+      if (detailBox) detailBox.classList.add("visible");
+
+      var detailInput = document.getElementById("outside-food-input");
+      if (detailInput) {
+        detailInput.value = data.daily.outside_food_detail || "";
+      }
+    }
+
+    // Pre-fill food log text area
+    var foodArea = document.getElementById("food-log");
+    if (foodArea && data.daily.food_log) {
+      foodArea.value = data.daily.food_log;
+    }
+  }
+
+
+  // ── Pre-fill supplement toggles ──────────────────────────────
+  // data.supplements is an object like { "Iron": "Yes", "B12": "No" }
+  if (data.supplements) {
+    Object.keys(data.supplements).forEach(function(suppName) {
+
+      // Build the toggle id from supplement name
+      // e.g. "Vitamin D3" → "toggle-supp-vitamin-d3"
+      var toggleId = "toggle-supp-" +
+        suppName.toLowerCase().replace(/ /g, "-");
+
+      setToggle(toggleId, data.supplements[suppName]);
+    });
+  }
+
+
+  // ── Pre-fill sleep dropdowns ─────────────────────────────────
+  if (data.sleep && data.sleep.bedtime) {
+
+    // Convert readable time "11:00 PM" back to a 24-hour value
+    // so we can select the matching option in the dropdown
+    var bedValue  = convertTo24Hour(data.sleep.bedtime);
+    var wakeValue = convertTo24Hour(data.sleep.wake_time);
+
+    setDropdown("sleep-bedtime",  bedValue);
+    setDropdown("sleep-waketime", wakeValue);
+
+    // Recalculate the sleep total display with pre-filled values
+    onSleepChange();
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────
+// setToggle
+// Sets a toggle checkbox to Yes (checked) or No (unchecked).
+// Safely does nothing if the toggle doesn't exist.
+//
+// toggleId: the checkbox element id e.g. "toggle-workout"
+// value:    "Yes" to check, anything else to uncheck
+// ─────────────────────────────────────────────────────────────
+
+function setToggle(toggleId, value) {
+  var checkbox = document.getElementById(toggleId);
+  if (!checkbox) return;
+  checkbox.checked = (value === "Yes");
+}
+
+
+// ─────────────────────────────────────────────────────────────
+// setDropdown
+// Sets a select dropdown to a specific value.
+// Loops through options to find the matching one.
+//
+// selectId: the select element id e.g. "sleep-bedtime"
+// value:    the value to select e.g. "23:00"
+// ─────────────────────────────────────────────────────────────
+
+function setDropdown(selectId, value) {
+  var select = document.getElementById(selectId);
+  if (!select || !value) return;
+
+  // Loop through all options and select the matching one
+  for (var i = 0; i < select.options.length; i++) {
+    if (select.options[i].value === value) {
+      select.selectedIndex = i;
+      break;
+    }
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────
+// convertTo24Hour
+// Converts a readable time string back to 24-hour HH:MM format.
+// e.g. "11:00 PM" → "23:00"
+//      "6:30 AM"  → "06:30"
+//
+// Needed to match the dropdown option values which are stored
+// in 24-hour format by sleep.js
+// ─────────────────────────────────────────────────────────────
+
+function convertTo24Hour(timeStr) {
+
+  if (!timeStr) return "";
+
+  // Parse "11:00 PM" or "6:30 AM"
+  var parts  = timeStr.split(" ");
+  var time   = parts[0];           // "11:00"
+  var period = parts[1];           // "AM" or "PM"
+
+  var timeParts = time.split(":");
+  var hours     = parseInt(timeParts[0]);
+  var minutes   = timeParts[1];    // "00" or "30"
+
+  // Convert to 24-hour
+  if (period === "AM") {
+    if (hours === 12) hours = 0;   // 12 AM = midnight = 00
+  } else {
+    if (hours !== 12) hours += 12; // PM hours: add 12 except for 12 PM
+  }
+
+  // Pad hours with leading zero e.g. 6 → "06"
+  var hoursStr = String(hours).padStart(2, "0");
+
+  return hoursStr + ":" + minutes;
+}
+
+
+// ─────────────────────────────────────────────────────────────
+// showLoadingIndicator
+// Shows a subtle "Loading..." text in the status area
+// while fetching existing entry from Google Sheets.
+// ─────────────────────────────────────────────────────────────
+
+function showLoadingIndicator() {
+  var statusEl = document.getElementById("save-status");
+  if (!statusEl) return;
+  statusEl.textContent = "Loading today's entry...";
+  statusEl.classList.remove("success", "error");
+  statusEl.classList.add("success");   // use green styling for loading too
+}
+
+
+// ─────────────────────────────────────────────────────────────
+// hideLoadingIndicator
+// Hides the loading message once fetch completes.
+// ─────────────────────────────────────────────────────────────
+
+function hideLoadingIndicator() {
+  var statusEl = document.getElementById("save-status");
+  if (!statusEl) return;
+  statusEl.classList.remove("success", "error");
+  statusEl.textContent = "";
 }
 
 
 // ─────────────────────────────────────────────────────────────
 // buildHabitsSection
-// Builds the Habits section — four yes/no toggles.
-// Uses buildToggleRow() from toggles.js for each row.
-// Returns HTML string.
 // ─────────────────────────────────────────────────────────────
 
 function buildHabitsSection() {
 
-  // Start building the section card
-  var html = '<div class="section">';
-  html    += '<div class="section-label">Habits</div>';
+  var html  = '<div class="section">';
+  html     += '<div class="section-label">Habits</div>';
 
-  // Workout toggle — always shown
   html += buildToggleRow(
-    "toggle-workout",          // id
-    "Workout",                 // label
-    "Exercise / YouTube video",// subtext
-    false                      // starts as No
+    "toggle-workout",
+    "Workout",
+    "Exercise / YouTube video",
+    false
   );
 
-  // Walk toggle — always shown
-  // Note in subtext explains Apple Health auto-confirms this
   html += buildToggleRow(
     "toggle-walk",
     "Walk",
@@ -102,7 +298,6 @@ function buildHabitsSection() {
     false
   );
 
-  // Studies toggle — only shown if SHOW_STUDIES is true in config.js
   if (SHOW_STUDIES) {
     html += buildToggleRow(
       "toggle-studies",
@@ -112,7 +307,6 @@ function buildHabitsSection() {
     );
   }
 
-  // Difficult day toggle — always shown
   html += buildToggleRow(
     "toggle-difficult-day",
     "Difficult day",
@@ -120,39 +314,31 @@ function buildHabitsSection() {
     false
   );
 
-  html += '</div>';   // Close section card
+  html += '</div>';
   return html;
 }
 
 
 // ─────────────────────────────────────────────────────────────
 // buildFoodSection
-// Builds the Food section — outside food toggle and food text area.
-// Returns HTML string.
 // ─────────────────────────────────────────────────────────────
 
 function buildFoodSection() {
 
-  var html = '<div class="section">';
-  html    += '<div class="section-label">Food</div>';
+  var html  = '<div class="section">';
+  html     += '<div class="section-label">Food</div>';
 
-  // Outside food / eating out toggle
-  // Has a special onchange handler to show/hide the detail field
   html += (
     '<div class="toggle-row">' +
-      '<div>' +
-        '<div class="toggle-label">Outside food / eating out</div>' +
-      '</div>' +
+      '<div><div class="toggle-label">Outside food / eating out</div></div>' +
       '<label class="toggle">' +
         '<input type="checkbox" id="toggle-outside-food" ' +
-          'onchange="onOutsideFoodToggle()">' +  // defined in toggles.js
+          'onchange="onOutsideFoodToggle()">' +
         '<span class="toggle-track"></span>' +
       '</label>' +
     '</div>'
   );
 
-  // Detail field — hidden until toggle is turned on
-  // onOutsideFoodToggle() in toggles.js shows/hides this
   html += (
     '<div class="outside-detail" id="outside-food-detail">' +
       '<input class="outside-input" type="text" ' +
@@ -161,101 +347,68 @@ function buildFoodSection() {
     '</div>'
   );
 
-  // Divider between the toggle and the text area
   html += '<div style="height: 12px;"></div>';
 
-  // Food text area — write exactly as you do now
   html += '<label class="food-label" for="food-log">What did you eat today?</label>';
   html += (
     '<textarea class="food-area" id="food-log" ' +
-      'placeholder="e.g. Tea, toast 2, manuka, anjeer, pumpkin seeds, ' +
-      'walnut, almond, coffee, methi phulka 3, alo matar, paneer gravy...">' +
+      'placeholder="e.g. Tea, toast 2&#10;Manuka, anjeer, pumpkin seeds&#10;Coffee&#10;Methi phulka 3, alo matar, paneer gravy...">' +
     '</textarea>'
   );
 
-  // Hint text below the food area
   html += (
     '<div class="food-hint">' +
-      'Write naturally — AI will read this and estimate your nutrients' +
+      'Write naturally — new lines or commas both work fine' +
     '</div>'
   );
 
-  html += '</div>';   // Close section card
+  html += '</div>';
   return html;
 }
 
 
 // ─────────────────────────────────────────────────────────────
 // buildSupplementsSection
-// Builds the Supplements section using SUPPLEMENTS from config.js.
-// Loops through each supplement and creates a toggle row for it.
-// Returns HTML string.
 // ─────────────────────────────────────────────────────────────
 
 function buildSupplementsSection() {
 
-  var html = '<div class="section">';
-  html    += '<div class="section-label">Supplements</div>';
+  var html  = '<div class="section">';
+  html     += '<div class="section-label">Supplements</div>';
 
-  // Loop through each supplement defined in config.js
-  // This means adding a new supplement to config.js automatically
-  // adds it here — no need to touch this file
   SUPPLEMENTS.forEach(function(supp) {
 
-    // Build a unique id from the supplement name
-    // e.g. "Vitamin D3" → "toggle-supp-vitamin-d3"
-    var toggleId = "toggle-supp-" +
+    var toggleId  = "toggle-supp-" +
       supp.name.toLowerCase().replace(/ /g, "-");
-
-    // Get the readable schedule badge text
-    // e.g. "wednesday" → "Wednesdays"
-    // getScheduleBadgeText() is defined in toggles.js
     var badgeText = getScheduleBadgeText(supp);
-
-    // Daily supplements get green badge, others get blue
     var badgeType = supp.frequency === "daily" ? "daily" : "other";
 
-    // Build one toggle row for this supplement
-    // buildSupplementToggleRow() is defined in toggles.js
     html += buildSupplementToggleRow(
-      toggleId,
-      supp.name,
-      supp.notes,
-      badgeText,
-      badgeType
+      toggleId, supp.name, supp.notes, badgeText, badgeType
     );
   });
 
-  html += '</div>';   // Close section card
+  html += '</div>';
   return html;
 }
 
 
 // ─────────────────────────────────────────────────────────────
 // buildBloodReportSection
-// Builds the Blood Report section — a PDF upload area.
-// Shows every day but only needs to be used when you have
-// a new blood report to upload.
-// Returns HTML string.
 // ─────────────────────────────────────────────────────────────
 
 function buildBloodReportSection() {
 
-  var html = '<div class="section">';
-  html    += '<div class="section-label">Blood report</div>';
-
-  // Description — reassures user this is not a daily task
-  html += (
+  var html  = '<div class="section">';
+  html     += '<div class="section-label">Blood report</div>';
+  html     += (
     '<div class="section-desc">' +
       'Only when you have a new report — ignore on most days' +
     '</div>'
   );
-
-  // Upload box — tapping this will trigger file picker
-  // The actual file handling will be built in upload.js later
   html += (
     '<div class="upload-box" onclick="triggerBloodReportUpload()">' +
-      '<div class="upload-icon">&#128196;</div>' +  // Document emoji
+      '<div class="upload-icon">&#128196;</div>' +
       '<div class="upload-label">' +
         'Tap to upload <span>blood report PDF</span>' +
       '</div>' +
@@ -264,35 +417,28 @@ function buildBloodReportSection() {
       '</div>' +
     '</div>'
   );
-
-  // Hidden file input — triggered by the upload box tap above
   html += (
     '<input type="file" id="blood-report-file" ' +
       'accept=".pdf" style="display:none;">'
   );
 
-  html += '</div>';   // Close section card
+  html += '</div>';
   return html;
 }
 
 
 // ─────────────────────────────────────────────────────────────
 // buildHealthNoteSection
-// Builds the Apple Health info banner at the bottom of the form.
-// Reminds the user what gets pulled automatically so they
-// don't feel like they need to enter it manually.
-// Returns HTML string.
 // ─────────────────────────────────────────────────────────────
 
 function buildHealthNoteSection() {
 
   return (
     '<div class="health-note">' +
-      '<div class="health-note-icon">&#63743;</div>' +  // Apple logo
+      '<div class="health-note-icon">&#63743;</div>' +
       '<div class="health-note-text">' +
         'Weight, walk distance, activity and periods are pulled ' +
-        'from Apple Health automatically every Sunday. ' +
-        'You do not need to enter these manually.' +
+        'from Apple Health automatically every Sunday.' +
       '</div>' +
     '</div>'
   );
@@ -301,29 +447,16 @@ function buildHealthNoteSection() {
 
 // ─────────────────────────────────────────────────────────────
 // triggerBloodReportUpload
-// Called when user taps the blood report upload box.
-// Opens the iPhone file picker filtered to PDF files.
-// The actual upload logic will be added in upload.js later.
 // ─────────────────────────────────────────────────────────────
 
 function triggerBloodReportUpload() {
-
   var fileInput = document.getElementById("blood-report-file");
-  if (fileInput) {
-    fileInput.click();   // Programmatically open the file picker
-  }
+  if (fileInput) fileInput.click();
 }
 
 
 // ─────────────────────────────────────────────────────────────
-// window.onload
-// This runs automatically when the page finishes loading.
-// It is the starting point of the entire app.
-//
-// Order matters here:
-//   1. buildForm() sets up all the HTML
-//   2. initialiseSleepDropdowns() runs inside buildForm()
-//      after the HTML exists
+// window.onload — Starting point of the entire app
 // ─────────────────────────────────────────────────────────────
 
 window.onload = function() {
