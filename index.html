@@ -4,181 +4,209 @@
 <!--
   ─────────────────────────────────────────────────────────────
   index.html — NourishSync Web App Shell
-  
-  This file is the frame of the app. It does three things:
-    1. Sets up the page for mobile (viewport, title, icon)
-    2. Loads all the CSS and JavaScript files
-    3. Defines the basic page structure (header, content, nav)
-  
-  There is NO logic in this file.
-  All logic lives in the .js files loaded at the bottom.
+
+  UPDATES IN THIS VERSION:
+    - Added setup page for first-time configuration
+    - SHEET_URL and APP_PASSWORD no longer hardcoded here
+    - setup.js loads and manages sensitive credentials
+    - Credentials stored in iPhone localStorage only
+    - GitHub never sees the actual URL or password
   ─────────────────────────────────────────────────────────────
 -->
 
 <head>
-
-  <!-- Tell the browser this is a mobile-friendly page -->
-  <!-- Without this, iPhone would zoom out and make everything tiny -->
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <!-- The name that appears on your iPhone home screen -->
   <title>NourishSync</title>
-
-  <!-- Makes it look like a native app when added to home screen -->
-  <!-- Hides the Safari browser bar when opened from home screen -->
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="NourishSync" />
-
-  <!-- App theme colour — shows in the browser bar on Android -->
   <meta name="theme-color" content="#1D9E75" />
-
-  <!-- Load our stylesheet — all visual styling is in here -->
   <link rel="stylesheet" href="style.css" />
-
 </head>
 
 <body>
 
   <!-- ───────────────────────────────────────────────────────
-    TOP BAR
-    Shows the app name and current user name.
-    User name is filled in by form.js using config.js
+    SETUP PAGE
+    Shown only on first launch or when credentials are missing.
+    Hidden after setup is complete.
+    Managed entirely by setup.js.
   ─────────────────────────────────────────────────────────── -->
-  <div class="topbar">
+  <div id="setup-page" style="display:none;">
 
-    <!-- App title on the left -->
-    <div class="topbar-left">
-      <div class="topbar-title">NourishSync</div>
-      <div class="topbar-sub" id="topbar-sub">Daily log</div>
+    <div class="setup-container">
+
+      <div class="setup-header">
+        <div class="setup-title">Welcome to NourishSync</div>
+        <div class="setup-sub">One-time setup — takes 2 minutes</div>
+      </div>
+
+      <div class="setup-card">
+
+        <div class="setup-intro">
+          Your Google Apps Script URL and password are stored
+          only on this device. They are never uploaded to GitHub
+          or shared anywhere.
+        </div>
+
+        <!-- Google Apps Script Web App URL -->
+        <div class="setup-field">
+          <label class="setup-label" for="setup-url">
+            Google Apps Script URL
+          </label>
+          <input
+            type="url"
+            id="setup-url"
+            class="setup-input"
+            placeholder="https://script.google.com/macros/s/.../exec"
+          />
+          <div class="setup-hint">
+            From Apps Script → Deploy → Manage deployments → copy the URL
+          </div>
+        </div>
+
+        <!-- App Password -->
+        <div class="setup-field">
+          <label class="setup-label" for="setup-password">
+            App password
+          </label>
+          <input
+            type="password"
+            id="setup-password"
+            class="setup-input"
+            placeholder="Your secret password"
+          />
+          <div class="setup-hint">
+            Must match APP_PASSWORD in your Code.gs file
+          </div>
+        </div>
+
+        <!-- Error message — shown if validation fails -->
+        <div class="setup-error" id="setup-error"></div>
+
+        <!-- Save button -->
+        <button class="setup-btn" onclick="saveSetup()">
+          Save and open app
+        </button>
+
+      </div>
+
     </div>
-
-    <!-- User avatar on the right — shows first letter of your name -->
-    <!-- Filled in by form.js using USER_NAME from config.js -->
-    <div class="avatar" id="user-avatar"></div>
 
   </div>
 
 
   <!-- ───────────────────────────────────────────────────────
-    MAIN CONTENT AREA
-    This is where the active page is shown.
-    Only one page is visible at a time.
-    JavaScript switches between pages by showing/hiding them.
+    MAIN APP
+    Hidden until setup is confirmed complete.
+    Shown by setup.js once credentials are verified.
   ─────────────────────────────────────────────────────────── -->
-  <main class="main-content">
+  <div id="main-app" style="display:none;">
 
-    <!-- PAGE: Daily Log Form -->
-    <!-- This is the default page shown when you open the app -->
-    <div class="page active" id="page-log">
-
-      <!-- Date navigation bar — built by datepicker.js -->
-      <div id="datepicker-container"></div>
-
-      <!-- The form sections — built by form.js -->
-      <div id="form-container"></div>
-
-      <!-- Save button — wired up by save.js -->
-      <button class="save-btn" id="save-btn" onclick="saveForm()">
-        Save today's log
-      </button>
-
-      <!-- Save status message — shown after saving -->
-      <!-- Hidden by default, shown briefly by save.js -->
-      <div class="save-status" id="save-status"></div>
-
-    </div>
-
-
-    <!-- PAGE: Weekly Review -->
-    <!-- Hidden by default — shown when you tap Review in the nav -->
-    <!-- Will be built later once you have real data -->
-    <div class="page" id="page-review">
-      <div class="coming-soon">
-        <div class="coming-soon-icon">📊</div>
-        <div class="coming-soon-title">Weekly review</div>
-        <div class="coming-soon-text">
-          Log a few days of data first — your weekly summary 
-          will appear here once you have entries to review.
+    <!-- Top bar -->
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="topbar-title">NourishSync</div>
+        <div class="topbar-sub" id="topbar-sub">Daily log</div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div class="avatar" id="user-avatar"></div>
+        <!-- Settings icon — tapping opens setup again to update credentials -->
+        <div class="settings-icon" onclick="showSetup(true)" title="Settings">
+          &#9881;
         </div>
       </div>
     </div>
 
+    <!-- Main content area -->
+    <main class="main-content">
 
-    <!-- PAGE: Health Import -->
-    <!-- Hidden by default — shown when you tap Health in the nav -->
-    <!-- For uploading Apple Health XML and blood report PDFs -->
-    <!-- Will be built in a later step -->
-    <div class="page" id="page-health">
-      <div class="coming-soon">
-        <div class="coming-soon-icon">🩺</div>
-        <div class="coming-soon-title">Health import</div>
-        <div class="coming-soon-text">
-          Upload your Apple Health export or blood report PDF here.
-          Coming in the next step.
+      <!-- Daily log page — default -->
+      <div class="page active" id="page-log">
+        <div id="datepicker-container"></div>
+        <div id="form-container"></div>
+        <button class="save-btn" id="save-btn" onclick="saveForm()">
+          Save
+        </button>
+        <div class="save-status" id="save-status"></div>
+      </div>
+
+      <!-- Weekly review page -->
+      <div class="page" id="page-review">
+        <div class="coming-soon">
+          <div class="coming-soon-icon">📊</div>
+          <div class="coming-soon-title">Weekly review</div>
+          <div class="coming-soon-text">
+            Log a few days of data first — your weekly summary
+            will appear here once you have entries to review.
+          </div>
         </div>
       </div>
-    </div>
 
-  </main>
+      <!-- Health import page -->
+      <div class="page" id="page-health">
+        <div class="coming-soon">
+          <div class="coming-soon-icon">🩺</div>
+          <div class="coming-soon-title">Health import</div>
+          <div class="coming-soon-text">
+            Upload your Apple Health export or blood report PDF here.
+            Coming in the next step.
+          </div>
+        </div>
+      </div>
 
+    </main>
 
-  <!-- ───────────────────────────────────────────────────────
-    BOTTOM NAVIGATION BAR
-    Three tabs: Log, Review, Health
-    Tapping a tab switches the active page above.
-    Active tab is highlighted in green.
-  ─────────────────────────────────────────────────────────── -->
-  <nav class="bottom-nav">
+    <!-- Bottom navigation -->
+    <nav class="bottom-nav">
+      <div class="nav-item active" id="nav-log" onclick="switchPage('log')">
+        <div class="nav-icon">📝</div>
+        <div class="nav-label">Log</div>
+      </div>
+      <div class="nav-item" id="nav-review" onclick="switchPage('review')">
+        <div class="nav-icon">📊</div>
+        <div class="nav-label">Review</div>
+      </div>
+      <div class="nav-item" id="nav-health" onclick="switchPage('health')">
+        <div class="nav-icon">🩺</div>
+        <div class="nav-label">Health</div>
+      </div>
+    </nav>
 
-    <!-- Log tab — default active tab -->
-    <div class="nav-item active" id="nav-log" onclick="switchPage('log')">
-      <div class="nav-icon">📝</div>
-      <div class="nav-label">Log</div>
-    </div>
-
-    <!-- Review tab -->
-    <div class="nav-item" id="nav-review" onclick="switchPage('review')">
-      <div class="nav-icon">📊</div>
-      <div class="nav-label">Review</div>
-    </div>
-
-    <!-- Health tab -->
-    <div class="nav-item" id="nav-health" onclick="switchPage('health')">
-      <div class="nav-icon">🩺</div>
-      <div class="nav-label">Health</div>
-    </div>
-
-  </nav>
+  </div>
 
 
   <!-- ───────────────────────────────────────────────────────
     JAVASCRIPT FILES
-    Loaded at the bottom so the HTML above loads first.
-    Order matters — config.js must be first because all
-    other files depend on the settings defined in it.
+    Order matters — config.js first, setup.js second.
+    setup.js runs immediately and either shows setup page
+    or shows main app depending on stored credentials.
   ─────────────────────────────────────────────────────────── -->
 
-  <!-- 1. Your personal settings — loaded first -->
+  <!-- 1. Personal settings — name, supplements, sleep config -->
   <script src="config.js"></script>
 
-  <!-- 2. Date navigation — next/previous day, back-filling -->
+  <!-- 2. Setup — manages credentials in localStorage -->
+  <!--    Runs first — shows setup page or main app -->
+  <script src="setup.js"></script>
+
+  <!-- 3. Date navigation -->
   <script src="datepicker.js"></script>
 
-  <!-- 3. Toggle interactions — yes/no toggles, outside food -->
+  <!-- 4. Toggle interactions -->
   <script src="toggles.js"></script>
 
-  <!-- 4. Sleep dropdowns — time selection and hour calculation -->
+  <!-- 5. Sleep dropdowns -->
   <script src="sleep.js"></script>
 
-  <!-- 5. Form builder — pulls everything together into the form -->
+  <!-- 6. Form builder -->
   <script src="form.js"></script>
 
-  <!-- 6. Save — collects form data and sends to Google Sheets -->
+  <!-- 7. Save to Google Sheets -->
   <script src="save.js"></script>
 
-  <!-- 7. Prefill — loads existing entry for today on app open -->
+  <!-- 8. Pre-fill form with today's existing entry -->
   <script src="prefill.js"></script>
 
 </body>
