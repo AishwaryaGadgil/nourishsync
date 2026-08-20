@@ -17,7 +17,7 @@
 // Appears at the top of the app as your avatar initial
 // ─────────────────────────────────────────────────────────────
 
-var USER_NAME = "Priya";
+var USER_NAME = "Aishwarya";
 
 
 // ─────────────────────────────────────────────────────────────
@@ -26,7 +26,7 @@ var USER_NAME = "Priya";
 // It looks like: https://script.google.com/macros/s/ABC.../exec
 // ─────────────────────────────────────────────────────────────
 
-var SHEET_URL = "PASTE_YOUR_WEB_APP_URL_HERE";
+var SHEET_URL = "https://script.google.com/macros/s/AKfycby7sn6RZkqYzSZ2IDbvgyPQ5o4wJVIc0SdaKpj9MVf9gx3huIk6vcRjvM5ZZXYtcAWN/exec";
 
 
 // ─────────────────────────────────────────────────────────────
@@ -40,7 +40,7 @@ var SHEET_URL = "PASTE_YOUR_WEB_APP_URL_HERE";
 // Choose something personal that only you know.
 // ─────────────────────────────────────────────────────────────
 
-var APP_PASSWORD = "nourishsync2026";
+var APP_PASSWORD = "NourishSync@123";
 
 
 // ─────────────────────────────────────────────────────────────
