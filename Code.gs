@@ -19,7 +19,7 @@
 // Your secret password — must match the one in config.js
 // Change this to something personal that only you know
 // e.g. your pet's name + birth year
-var APP_PASSWORD = "nourishsync2026";
+var APP_PASSWORD = "NourishSync@123";
 
 // Sheet name — change this if you rename your Google Sheet file
 var SHEET_NAME = "NourishSync";
